@@ -8,26 +8,31 @@ SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 DETAILS_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 
 @click.command()
-@click.option("--max_results", default=10, help="Number of results to fetch")
-@click.option("--output", default="pubmed_papers.csv", help="Output CSV filename")
-def fetch_pubmed_papers(max_results, output):
+@click.option("-d", "--debug", is_flag=True, help="Enable debug mode for detailed logs.")
+@click.option("-f", "--file", default="pubmed_papers.csv", help="Specify filename to save results.")
+@click.option("--max_results", default=10, help="Number of results to fetch from PubMed.")
+def fetch_pubmed_papers(debug, file, max_results):
     """Fetches research papers from PubMed and saves them to a CSV file."""
 
-    # User enters the query interactively
+    # Prompt user for search query
     query = click.prompt("Enter your search query")
 
-    click.echo(f"Fetching papers for query: {query}...")
+    if debug:
+        click.echo(f"Debug Mode: Fetching papers for query: {query}")
 
     # Step 1: Get list of PubMed IDs for the query
     search_params = {
         "db": "pubmed",
-        "term": query,  # Uses the user input query
+        "term": query,  # Uses user input query
         "retmode": "json",
         "retmax": max_results
     }
     search_response = requests.get(SEARCH_URL, params=search_params)
-    search_response.raise_for_status()
 
+    if debug:
+        click.echo(f"PubMed API Response: {search_response.status_code}")
+
+    search_response.raise_for_status()
     search_data = search_response.json()
     pubmed_ids = search_data.get("esearchresult", {}).get("idlist", [])
 
@@ -42,8 +47,11 @@ def fetch_pubmed_papers(max_results, output):
         "retmode": "json"
     }
     details_response = requests.get(DETAILS_URL, params=details_params)
-    details_response.raise_for_status()
 
+    if debug:
+        click.echo(f"Fetching details for {len(pubmed_ids)} papers...")
+
+    details_response.raise_for_status()
     details_data = details_response.json().get("result", {})
 
     papers = []
@@ -70,11 +78,10 @@ def fetch_pubmed_papers(max_results, output):
             "Corresponding Author Email": corresponding_email
         })
 
-    # Save to CSV
+    # Step 3: Always Save to CSV (even if -f is not provided)
     df = pd.DataFrame(papers)
-    df.to_csv(output, index=False)
-    
-    click.echo(f"Saved {len(papers)} papers to {output}")
+    df.to_csv(file, index=False)
+    click.echo(f"Results saved to {file}")
 
 def extract_company_authors(authors):
     """Identify authors with company affiliations."""
